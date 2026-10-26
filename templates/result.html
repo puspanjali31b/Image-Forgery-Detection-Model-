@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Detection Result</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container result-page">
+      <header class="hero result-header">
+        <h1>Detection Result</h1>
+        <a href="/" class="back-link">Upload another image</a>
+      </header>
+
+      {% if model_warning %}
+      <p class="alert warning">{{ model_warning }}</p>
+      {% endif %}
+      {% if report_error %}
+      <p class="alert warning">{{ report_error }}</p>
+      {% endif %}
+
+      <div class="report-actions">
+        {% if report_url %}<a class="download-link" href="{{ report_url }}" download>Download forensic PDF</a>{% endif %}
+      </div>
+
+      <div class="metrics">
+        <div class="metric-card">
+          <span class="label">Status</span>
+          <span class="value">{{ status }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Method</span>
+          <span class="value">{{ method }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Confidence</span>
+          <span class="value">{{ confidence }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Forged region</span>
+          <span class="value">{{ area_label }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Forgery type</span>
+          <span class="value">{{ forgery_type }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Bounding boxes</span>
+          <span class="value">{{ box_count }}</span>
+        </div>
+        <div class="metric-card">
+          <span class="label">Suspected pixels</span>
+          <span class="value">{{ suspected_pixels }}</span>
+        </div>
+      </div>
+
+      <div class="image-grid">
+        <figure class="image-card">
+          <h2>Original</h2>
+          <img src="{{ image_url }}" alt="Original image" />
+        </figure>
+
+        <figure class="image-card">
+          <h2>Detected Mask</h2>
+          <img src="{{ mask_url }}" alt="Binary forgery mask" />
+        </figure>
+
+        <figure class="image-card">
+          <h2>Bounding Boxes</h2>
+          <img src="{{ boxes_url }}" alt="Detected suspicious regions with bounding boxes" />
+        </figure>
+
+        <figure class="image-card">
+          <h2>Error Level Analysis</h2>
+          <img src="{{ ela_url }}" alt="Error level analysis map" />
+        </figure>
+
+        <figure class="image-card">
+          <h2>Noise Residual</h2>
+          <img src="{{ noise_url }}" alt="SRM-inspired noise residual map" />
+        </figure>
+
+        <figure class="image-card">
+          <h2>{{ explanation_label }}</h2>
+          <img src="{{ explanation_url }}" alt="Model explanation visualization" />
+        </figure>
+      </div>
+
+      <section class="metadata-section">
+        <h2>Image metadata</h2>
+        {% if metadata %}
+        <dl class="metadata-list">
+          {% for key, value in metadata.items() %}
+          <div><dt>{{ key }}</dt><dd>{{ value }}</dd></div>
+          {% endfor %}
+        </dl>
+        {% else %}
+        <p>No readable EXIF metadata was found.</p>
+        {% endif %}
+      </section>
+
+      {% if boxes %}
+      <section class="metadata-section">
+        <h2>Detected regions</h2>
+        <ol class="box-list">
+          {% for box in boxes %}
+          <li>x: {{ box[0] }}-{{ box[2] }}, y: {{ box[1] }}-{{ box[3] }}</li>
+          {% endfor %}
+        </ol>
+      </section>
+      {% endif %}
+      <p class="disclaimer">Automated screening only. Results are not proof of manipulation or a certified forensic opinion.</p>
+    </div>
+  </body>
+</html>

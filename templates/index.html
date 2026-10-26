@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Copy-Move Forgery Detection</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="container">
+      <header class="hero">
+        <h1>Copy-Move Image Forgery Detection</h1>
+        <p>
+          Upload an image to test whether a copied region has been pasted elsewhere in the same picture.
+        </p>
+      </header>
+
+      <main class="panel">
+        {% if error %}
+        <div class="alert error">{{ error }}</div>
+        {% endif %}
+
+        <form method="post" enctype="multipart/form-data" class="upload-form">
+          <label for="image" class="upload-box">
+            <span class="upload-title">Drop an image here or choose a file</span>
+            <span id="file-name" class="upload-hint">PNG, JPEG, TIFF, BMP, or WebP (up to 16 MB)</span>
+            <input id="image" name="image" type="file" accept="image/*" required />
+          </label>
+          <button type="submit">Detect Forgery</button>
+        </form>
+
+        <p class="processing-note">Analysis includes a traditional copy-move detector. A trained U-Net checkpoint enables ELA/SRM multi-task predictions and Grad-CAM.</p>
+        <div class="project-summary">
+          <h2>Project overview</h2>
+          <ul>
+            <li>ELA and SRM-inspired image channels with a multi-task U-Net architecture</li>
+            <li>Mask regions, bounding boxes, Grad-CAM explanation, and image metadata</li>
+            <li>Downloadable analysis report with the original image and generated evidence</li>
+          </ul>
+        </div>
+      </main>
+    </div>
+    <script>
+      const uploadBox = document.querySelector(".upload-box");
+      const imageInput = document.querySelector("#image");
+      const fileName = document.querySelector("#file-name");
+
+      const showFileName = () => {
+        fileName.textContent = imageInput.files.length ? imageInput.files[0].name : "PNG, JPEG, TIFF, BMP, or WebP (up to 16 MB)";
+      };
+
+      imageInput.addEventListener("change", showFileName);
+      ["dragenter", "dragover"].forEach((eventName) => {
+        uploadBox.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          uploadBox.classList.add("is-dragging");
+        });
+      });
+      ["dragleave", "drop"].forEach((eventName) => {
+        uploadBox.addEventListener(eventName, (event) => {
+          event.preventDefault();
+          uploadBox.classList.remove("is-dragging");
+        });
+      });
+      uploadBox.addEventListener("drop", (event) => {
+        if (event.dataTransfer.files.length) {
+          imageInput.files = event.dataTransfer.files;
+          showFileName();
+        }
+      });
+    </script>
+  </body>
+</html>

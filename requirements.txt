@@ -1,0 +1,10 @@
+Flask==3.0.3
+opencv-python-headless==4.10.0.84
+numpy==2.1.2
+Pillow==10.4.0
+torch==2.5.1
+torchvision==0.20.1
+scikit-learn==1.5.2
+matplotlib==3.9.2
+supervision>=0.25.1,<1.0
+reportlab>=4.2,<5.0
