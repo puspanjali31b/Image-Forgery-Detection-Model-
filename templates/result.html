@@ -55,17 +55,59 @@
         </div>
       </div>
 
+      <figure class="image-card full-width">
+        <h2>Detection Visualisation</h2>
+        <img src="{{ analysis_url }}" alt="Confidence and detected-region chart" />
+      </figure>
+
+      <section class="model-metrics-section">
+        <h2>Model evaluation metrics</h2>
+        {% if model_metrics %}
+        <p class="metrics-context">Dataset: {{ metrics_dataset }} · Evaluated samples: {{ model_metrics.sample_count }}</p>
+        <div class="evaluation-grid">
+          {% for metric in [('Accuracy', classification_metrics.accuracy), ('Precision', classification_metrics.precision), ('Recall', classification_metrics.recall), ('F1-score', classification_metrics.f1_score)] %}
+          <div class="metric-card evaluation-metric-card">
+            <span class="label">{{ metric[0] }}</span>
+            <span class="value">{{ '%.1f%%'|format(metric[1] * 100) }}</span>
+          </div>
+          {% endfor %}
+        </div>
+        <div class="image-grid evaluation-plots">
+          <figure class="image-card"><h2>Classification scores</h2><img src="{{ classification_plot_url }}" alt="Classification metric bar chart" /></figure>
+          <figure class="image-card"><h2>Confusion matrix</h2><img src="{{ confusion_plot_url }}" alt="Classification confusion matrix" /></figure>
+          {% if training_loss_plot_url %}<figure class="image-card"><h2>Training loss</h2><img src="{{ training_loss_plot_url }}" alt="Training loss curve" /></figure>{% endif %}
+        </div>
+        {% else %}
+        <p class="metrics-context">These dataset-level metrics are not available yet. Train and evaluate the model with labelled real and forged images.</p>
+        <div class="evaluation-grid">
+          <div class="metric-card evaluation-metric-card unavailable"><span class="label">Accuracy</span><span class="value">N/A</span></div>
+          <div class="metric-card evaluation-metric-card unavailable"><span class="label">Precision</span><span class="value">N/A</span></div>
+          <div class="metric-card evaluation-metric-card unavailable"><span class="label">Recall</span><span class="value">N/A</span></div>
+          <div class="metric-card evaluation-metric-card unavailable"><span class="label">F1-score</span><span class="value">N/A</span></div>
+        </div>
+        {% endif %}
+      </section>
+
+      <section class="comparison-section" aria-label="Image comparison">
+        <div class="comparison-grid">
+          <figure class="image-card">
+            <h2>User Uploaded Image (To be verified)</h2>
+            <img src="{{ image_url }}" alt="User uploaded image to be verified" />
+          </figure>
+
+          <figure class="image-card">
+            <h2>Detected Manipulation Mask (Black = Original, White = Edited)</h2>
+            <img src="{{ mask_url }}" alt="Binary manipulation mask: black is original and white is edited" />
+          </figure>
+
+          <figure class="image-card">
+            <h2>Tampered Region Highlight (Overlay)</h2>
+            <img src="{{ overlay_url }}" alt="Original image with detected tampered regions highlighted in semi-transparent red" />
+          </figure>
+        </div>
+      </section>
+
       <div class="image-grid">
-        <figure class="image-card">
-          <h2>Original</h2>
-          <img src="{{ image_url }}" alt="Original image" />
-        </figure>
-
-        <figure class="image-card">
-          <h2>Detected Mask</h2>
-          <img src="{{ mask_url }}" alt="Binary forgery mask" />
-        </figure>
-
         <figure class="image-card">
           <h2>Bounding Boxes</h2>
           <img src="{{ boxes_url }}" alt="Detected suspicious regions with bounding boxes" />

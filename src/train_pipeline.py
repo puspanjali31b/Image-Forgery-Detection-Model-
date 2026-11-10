@@ -9,6 +9,7 @@ import torch
 import torch.nn.functional as functional
 from PIL import Image, ImageOps
 
+from src.evaluation import evaluate_model, save_evaluation_outputs
 from src.forensic_features import FORGERY_TYPES, MODEL_IMAGE_SIZE, letterbox_image, prepare_model_input
 from src.unet import UNet, dice_loss
 
@@ -78,6 +79,7 @@ def train_unet(
     labels_csv: str | None = None,
     checkpoint_path: str = "models/forgery_multitask.pt",
     image_size: int = MODEL_IMAGE_SIZE,
+    metrics_dir: str | None = None,
 ) -> UNet:
     train_dir = Path(data_dir) / "train"
     train_dataset = ForgeryDataset(
@@ -93,6 +95,7 @@ def train_unet(
     segmentation_criterion = torch.nn.BCEWithLogitsLoss()
     classification_criterion = torch.nn.CrossEntropyLoss()
 
+    epoch_losses: list[float] = []
     for epoch in range(epochs):
         model.train()
         epoch_loss = 0.0
@@ -113,11 +116,29 @@ def train_unet(
             optimizer.step()
             epoch_loss += loss.item()
 
-        print(f"Epoch {epoch + 1}/{epochs} - loss: {epoch_loss / len(train_loader):.4f}")
+        average_loss = epoch_loss / len(train_loader)
+        epoch_losses.append(float(average_loss))
+        print(f"Epoch {epoch + 1}/{epochs} - loss: {average_loss:.4f}")
+
+    evaluation_dataset = train_dataset
+    test_dir = Path(data_dir) / "test"
+    if (test_dir / "images").is_dir() and (test_dir / "masks").is_dir():
+        evaluation_dataset = ForgeryDataset(
+            str(test_dir / "images"),
+            str(test_dir / "masks"),
+            labels_csv=labels_csv,
+            image_size=image_size,
+        )
+    evaluation_loader = torch.utils.data.DataLoader(evaluation_dataset, batch_size=batch_size, shuffle=False)
+    metrics = evaluate_model(model, evaluation_loader, device)
+    metrics["dataset"] = "test" if evaluation_dataset is not train_dataset else "train (no test split found)"
 
     checkpoint = Path(checkpoint_path)
     checkpoint.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"state_dict": model.cpu().state_dict(), "image_size": image_size}, checkpoint)
+    output_metrics_dir = Path(metrics_dir) if metrics_dir else checkpoint.parent
+    metrics["training_loss"] = epoch_losses
+    save_evaluation_outputs(metrics, output_metrics_dir, epoch_losses)
     return model
 
 
@@ -129,6 +150,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch-size", type=int, default=4)
     parser.add_argument("--learning-rate", type=float, default=1e-3)
     parser.add_argument("--checkpoint", default="models/forgery_multitask.pt")
+    parser.add_argument("--metrics-dir", help="Directory for metrics.json and visualization PNG files")
     args = parser.parse_args()
     train_unet(
         args.data_dir,
@@ -137,4 +159,5 @@ if __name__ == "__main__":
         learning_rate=args.learning_rate,
         labels_csv=args.labels_csv,
         checkpoint_path=args.checkpoint,
+        metrics_dir=args.metrics_dir,
     )

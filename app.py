@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import shutil
 from pathlib import Path
 from uuid import uuid4
 
@@ -10,6 +12,7 @@ from PIL import Image, ExifTags, ImageOps
 from werkzeug.utils import secure_filename
 
 from src.detector import detect_copy_move
+from src.evaluation import evaluate_traditional_detector, save_detection_visualization
 from src.forensic_features import make_ela_map, make_srm_map
 from src.forensic_inference import draw_bounding_boxes, extract_bounding_boxes, make_gradcam_overlay, predict_with_model
 from src.reporting import create_forensic_report
@@ -18,13 +21,43 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "static" / "uploads"
 RESULT_DIR = BASE_DIR / "static" / "results"
 MODEL_PATH = BASE_DIR / "models" / "forgery_multitask.pt"
-ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
+ALLOWED_EXTENSIONS = {".png", ".jpg", ".jpeg", ".jpe", ".tif", ".tiff", ".bmp", ".webp"}
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 RESULT_DIR.mkdir(parents=True, exist_ok=True)
 
 app = Flask(__name__, static_folder="static", template_folder="templates")
 app.config["MAX_CONTENT_LENGTH"] = 16 * 1024 * 1024
 app.config["UPLOAD_FOLDER"] = str(UPLOAD_DIR)
+
+
+def _ensure_evaluation_metrics() -> dict[str, object] | None:
+    metrics_path = MODEL_PATH.parent / "metrics.json"
+    if metrics_path.is_file():
+        return _model_metrics()
+    if not MODEL_PATH.parent.exists():
+        MODEL_PATH.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        return evaluate_traditional_detector(UPLOAD_DIR, MODEL_PATH.parent)
+    except Exception:
+        return None
+
+
+def _model_metrics() -> dict[str, object] | None:
+    metrics_path = MODEL_PATH.parent / "metrics.json"
+    if not metrics_path.is_file():
+        return None
+    try:
+        metrics = json.loads(metrics_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+
+    public_dir = BASE_DIR / "static" / "evaluation"
+    public_dir.mkdir(parents=True, exist_ok=True)
+    for filename in ("classification_metrics.png", "confusion_matrix.png", "training_loss.png"):
+        source = metrics_path.parent / filename
+        if source.is_file():
+            shutil.copy2(source, public_dir / filename)
+    return metrics
 
 
 def _read_metadata(image_path: Path) -> dict[str, str]:
@@ -46,6 +79,9 @@ def _read_metadata(image_path: Path) -> dict[str, str]:
     return dict(list(metadata.items())[:24])
 
 
+_ensure_evaluation_metrics()
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     if request.method == "POST":
@@ -62,7 +98,22 @@ def index():
         original_path = UPLOAD_DIR / original_name
         file.save(original_path)
 
-        image = cv2.imread(str(original_path))
+        image = cv2.imread(str(original_path), cv2.IMREAD_UNCHANGED)
+        if image is None:
+            try:
+                with Image.open(original_path) as source:
+                    decoded_rgb = np.asarray(ImageOps.exif_transpose(source).convert("RGB"), dtype=np.uint8)
+                image = cv2.cvtColor(decoded_rgb, cv2.COLOR_RGB2BGR)
+            except (OSError, ValueError):
+                image = None
+        elif image.ndim == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        elif image.shape[2] == 4:
+            rgba = cv2.cvtColor(image, cv2.COLOR_BGRA2RGBA)
+            alpha = rgba[:, :, 3:4].astype(np.float32) / 255.0
+            white_background = np.full_like(rgba[:, :, :3], 255, dtype=np.uint8)
+            rgb = cv2.convertScaleAbs(rgba[:, :, :3].astype(np.float32) * alpha + white_background.astype(np.float32) * (1.0 - alpha))
+            image = cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR)
         if image is None:
             return render_template("index.html", error="Could not read the uploaded image.")
 
@@ -107,8 +158,11 @@ def index():
         mask_path = RESULT_DIR / f"{image_id}_mask.png"
         cv2.imwrite(str(mask_path), mask_uint8)
 
+        red_tint = np.zeros_like(image)
+        red_tint[:] = (0, 0, 255)
+        blended = cv2.addWeighted(image, 0.55, red_tint, 0.45, 0)
         overlay = image.copy()
-        overlay[mask_uint8 > 0] = [0, 0, 255]
+        overlay[mask_uint8 > 0] = blended[mask_uint8 > 0]
         overlay_path = RESULT_DIR / f"{image_id}_overlay.png"
         cv2.imwrite(str(overlay_path), overlay)
 
@@ -134,6 +188,9 @@ def index():
         cv2.imwrite(str(explanation_path), explanation)
 
         area_percent = 100.0 * np.count_nonzero(mask_uint8) / float(mask_uint8.size)
+        visualization_path = RESULT_DIR / f"{image_id}_analysis.png"
+        save_detection_visualization(confidence * 100.0, area_percent, visualization_path)
+        model_metrics = _model_metrics()
         result_summary = {
             "image_url": f"/static/uploads/{original_name}",
             "mask_url": f"/static/results/{image_id}_mask.png",
@@ -156,6 +213,14 @@ def index():
             "suspected_pixels": int(np.count_nonzero(mask_uint8)),
             "model_warning": model_warning,
             "metadata": metadata,
+            "analysis_url": f"/static/results/{image_id}_analysis.png",
+            "model_metrics": model_metrics,
+            "classification_metrics": model_metrics.get("classification") if model_metrics else None,
+            "segmentation_metrics": model_metrics.get("segmentation") if model_metrics else None,
+            "metrics_dataset": model_metrics.get("dataset") if model_metrics else None,
+            "classification_plot_url": "/static/evaluation/classification_metrics.png" if model_metrics else None,
+            "confusion_plot_url": "/static/evaluation/confusion_matrix.png" if model_metrics else None,
+            "training_loss_plot_url": "/static/evaluation/training_loss.png" if (model_metrics and (BASE_DIR / "static" / "evaluation" / "training_loss.png").is_file()) else None,
         }
 
         report_path = RESULT_DIR / f"{image_id}_report.pdf"

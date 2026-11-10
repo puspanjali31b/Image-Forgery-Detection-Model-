@@ -23,8 +23,8 @@
         <form method="post" enctype="multipart/form-data" class="upload-form">
           <label for="image" class="upload-box">
             <span class="upload-title">Drop an image here or choose a file</span>
-            <span id="file-name" class="upload-hint">PNG, JPEG, TIFF, BMP, or WebP (up to 16 MB)</span>
-            <input id="image" name="image" type="file" accept="image/*" required />
+            <span id="file-name" class="upload-hint" aria-live="polite">PNG, JPEG, TIFF, BMP, or WebP (up to 16 MB)</span>
+            <input id="image" name="image" type="file" accept="image/png,image/jpeg,.png,.jpg,.jpeg,.jpe,.tif,.tiff,.bmp,.webp" required />
           </label>
           <button type="submit">Detect Forgery</button>
         </form>
@@ -44,29 +44,55 @@
       const uploadBox = document.querySelector(".upload-box");
       const imageInput = document.querySelector("#image");
       const fileName = document.querySelector("#file-name");
+      const defaultHint = "PNG, JPEG, TIFF, BMP, or WebP (up to 16 MB)";
+      const supportedExtensions = new Set([".png", ".jpg", ".jpeg", ".jpe", ".tif", ".tiff", ".bmp", ".webp"]);
+      let dragDepth = 0;
 
       const showFileName = () => {
-        fileName.textContent = imageInput.files.length ? imageInput.files[0].name : "PNG, JPEG, TIFF, BMP, or WebP (up to 16 MB)";
+        fileName.textContent = imageInput.files.length ? imageInput.files[0].name : defaultHint;
       };
 
       imageInput.addEventListener("change", showFileName);
-      ["dragenter", "dragover"].forEach((eventName) => {
-        uploadBox.addEventListener(eventName, (event) => {
-          event.preventDefault();
+      uploadBox.addEventListener("dragenter", (event) => {
+        event.preventDefault();
+        dragDepth += 1;
+        if (event.dataTransfer.types.includes("Files")) {
           uploadBox.classList.add("is-dragging");
-        });
+        }
       });
-      ["dragleave", "drop"].forEach((eventName) => {
-        uploadBox.addEventListener(eventName, (event) => {
-          event.preventDefault();
+      uploadBox.addEventListener("dragover", (event) => {
+        event.preventDefault();
+        if (event.dataTransfer.types.includes("Files")) {
+          event.dataTransfer.dropEffect = "copy";
+        }
+      });
+      uploadBox.addEventListener("dragleave", (event) => {
+        event.preventDefault();
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) {
           uploadBox.classList.remove("is-dragging");
-        });
+        }
       });
       uploadBox.addEventListener("drop", (event) => {
-        if (event.dataTransfer.files.length) {
-          imageInput.files = event.dataTransfer.files;
-          showFileName();
+        event.preventDefault();
+        dragDepth = 0;
+        uploadBox.classList.remove("is-dragging");
+
+        const file = Array.from(event.dataTransfer.files).find((droppedFile) => {
+          const extension = droppedFile.name.slice(droppedFile.name.lastIndexOf(".")).toLowerCase();
+          const expectedTypes = extension === ".png" ? ["image/png"] : [".jpg", ".jpeg", ".jpe"].includes(extension) ? ["image/jpeg", "image/jpg"] : [];
+          const typeMatches = expectedTypes.length === 0 || droppedFile.type === "" || expectedTypes.includes(droppedFile.type);
+          return supportedExtensions.has(extension) && typeMatches && (!droppedFile.type || droppedFile.type.startsWith("image/") || droppedFile.type === "");
+        });
+        if (!file) {
+          fileName.textContent = "Drop a supported JPG, PNG, TIFF, BMP, or WebP image.";
+          return;
         }
+
+        const transfer = new DataTransfer();
+        transfer.items.add(file);
+        imageInput.files = transfer.files;
+        imageInput.dispatchEvent(new Event("change", { bubbles: true }));
       });
     </script>
   </body>

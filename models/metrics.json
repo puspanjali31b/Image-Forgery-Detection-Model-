@@ -1,0 +1,22 @@
+{
+  "sample_count": 8,
+  "dataset": "Built-in copy-move benchmark (synthetic copy-paste and pristine variants)",
+  "benchmark_type": "traditional-detector",
+  "classification": {
+    "accuracy": 0.75,
+    "precision": 0.6666666666666666,
+    "recall": 1.0,
+    "f1_score": 0.8
+  },
+  "segmentation": null,
+  "confusion_matrix": [
+    [
+      2,
+      2
+    ],
+    [
+      0,
+      4
+    ]
+  ]
+}

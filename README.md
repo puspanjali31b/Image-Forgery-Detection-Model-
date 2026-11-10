@@ -85,7 +85,16 @@ Train and save the default checkpoint:
 python -m src.train_pipeline data --labels-csv data/train/labels.csv --epochs 20 --batch-size 4
 ```
 
-The checkpoint is written to `models/forgery_multitask.pt`. Restart or refresh the Flask app after training. You can choose another output using `--checkpoint path/to/model.pt`.
+After training, the project calculates image-classification accuracy, precision, recall, and F1-score, plus pixel-segmentation metrics. If `data/test/images` and `data/test/masks` exist, they are evaluated separately; otherwise training data is used and the result page displays a warning in the dataset label. Metric JSON and visualizations are written to `models/` by default. Restart or refresh the Flask app to display them.
+
+```text
+models/metrics.json
+models/classification_metrics.png
+models/confusion_matrix.png
+models/training_loss.png
+```
+
+The checkpoint is written to `models/forgery_multitask.pt`. You can choose another output using `--checkpoint path/to/model.pt`; `--metrics-dir path/to/output` selects where metric files are written.
 
 ## Outputs and limitations
 
